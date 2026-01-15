@@ -5,6 +5,11 @@
 *.iml
 .idea
 
+# Local Environment variables
+.env
+.env.*
+!.env.example
+
 # npm
 node_modules
 

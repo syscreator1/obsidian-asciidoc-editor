@@ -1,7 +1,9 @@
 import esbuild from "esbuild";
 import process from "process";
-import { builtinModules } from 'node:module';
+import { builtinModules } from "node:module";
+import "dotenv/config";
 import path from "node:path";
+import fs from "node:fs";
 
 const banner =
 `/*
@@ -10,45 +12,59 @@ if you want to view the source, please visit the github repository of this plugi
 */
 `;
 
-const prod = (process.argv[2] === "production");
+const prod = process.argv[2] === "production";
 
-const vaultPluginDir = "E:\\Obsidian\\Plugin開発用\\.obsidian\\plugins\\asciidoc-editor";
+// If OBSIDIAN_PLUGIN_DIR is set, build directly into the Obsidian vault plugin dir.
+// Otherwise, build into ./dist for portability (CI / forks / other machines).
+const vaultPluginDir = process.env.OBSIDIAN_PLUGIN_DIR?.trim();
+const outDir = vaultPluginDir ? vaultPluginDir : path.resolve("dist");
+
+if (!vaultPluginDir) {
+  console.log("[esbuild] OBSIDIAN_PLUGIN_DIR is not set. Outputting to ./dist");
+  console.log("[esbuild] Tip: create .env (see .env.example) to deploy directly to your vault.");
+} else {
+  console.log(`[esbuild] Outputting to plugin directory: ${vaultPluginDir}`);
+}
+
+// Ensure output directory exists
+fs.mkdirSync(outDir, { recursive: true });
+
+const outfile = path.join(outDir, "main.js");
 
 const context = await esbuild.context({
-	banner: {
-		js: banner,
-	},
-	entryPoints: ["src/main.ts"],
-	bundle: true,
-	packages: "bundle",
-	platform: "browser",
-	external: [
-		"obsidian",
-		"electron",
-		"@codemirror/autocomplete",
-		"@codemirror/collab",
-		"@codemirror/commands",
-		"@codemirror/language",
-		"@codemirror/lint",
-		"@codemirror/search",
-		"@codemirror/state",
-		"@codemirror/view",
-		"@lezer/common",
-		"@lezer/highlight",
-		"@lezer/lr",
-		...builtinModules],
-	format: "cjs",
-	target: "es2018",
-	logLevel: "info",
-	sourcemap: prod ? false : "inline",
-	treeShaking: true,
-	outfile: path.join(vaultPluginDir, "main.js"),
-	minify: prod,
+  banner: { js: banner },
+  entryPoints: ["src/main.ts"],
+  bundle: true,
+  packages: "bundle",
+  platform: "browser",
+  external: [
+    "obsidian",
+    "electron",
+    "@codemirror/autocomplete",
+    "@codemirror/collab",
+    "@codemirror/commands",
+    "@codemirror/language",
+    "@codemirror/lint",
+    "@codemirror/search",
+    "@codemirror/state",
+    "@codemirror/view",
+    "@lezer/common",
+    "@lezer/highlight",
+    "@lezer/lr",
+    ...builtinModules,
+  ],
+  format: "cjs",
+  target: "es2018",
+  logLevel: "info",
+  sourcemap: prod ? false : "inline",
+  treeShaking: true,
+  outfile,
+  minify: prod,
 });
 
 if (prod) {
-	await context.rebuild();
-	process.exit(0);
+  await context.rebuild();
+  process.exit(0);
 } else {
-	await context.watch();
+  await context.watch();
 }
