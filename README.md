@@ -147,3 +147,10 @@ but design-driven changes should be discussed first.
 
 This project prioritizes
 consistency and long-term maintainability over popularity.
+
+---
+
+## For Development
+
+To deploy directly into your vault during development, copy `.env.example` to `.env` and set `OBSIDIAN_PLUGIN_DIR`.
+
