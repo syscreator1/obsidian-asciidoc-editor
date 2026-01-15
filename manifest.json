@@ -1,0 +1,10 @@
+{
+  "id": "asciidoc-editor",
+  "name": "Asciidoc Editor",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.0",
+  "description": "Asciidoc preview with include support.",
+  "author": "you",
+  "authorUrl": "",
+  "isDesktopOnly": true
+}

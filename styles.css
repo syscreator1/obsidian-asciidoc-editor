@@ -1,0 +1,367 @@
+/* =========================================================
+   1. プレビュー画面の基本レイアウト
+   ========================================================= */
+.asciidoc-preview-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+/* コマンドバー（検索欄）を常に上に固定 */
+.asciidoc-preview-search {
+  position: sticky;  /* ★これで上部固定 */
+  top: 0;
+  z-index: 10;
+
+  /* 見た目（任意） */
+  border-bottom: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+}
+
+.asciidoc-preview {
+  flex: 1;
+  overflow: auto;
+  padding: 12px;
+  min-height: 0;
+  line-height: 1.6;
+}
+
+/* Obsidianテーマの画像制限を解除 */
+.asciidoc-preview img,
+.asciidoc-preview svg {
+  max-width: none !important;
+}
+
+.asciidoc-preview pre {
+  padding: 10px;
+  overflow-x: auto;
+  background: var(--background-secondary);
+}
+
+/* =========================================================
+   2. Kroki 図表 / ダイアグラム表示
+   ========================================================= */
+.kroki-diagram-wrap {
+  position: relative;
+  overflow: auto;
+  max-height: 80vh;
+  cursor: grab;
+  margin: 0.75rem 0;
+}
+
+.kroki-diagram-wrap.is-panning {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.kroki-diagram-zoom {
+  transform-origin: top left;
+}
+
+/* 図のサイズ設定 */
+.kroki-diagram-wrap svg,
+.kroki-diagram-wrap img.kroki-diagram,
+.kroki-diagram {
+  width: auto !important;
+  max-width: none !important;
+  height: auto !important;
+  display: inline-block;
+  vertical-align: top;
+}
+
+/* 検索ヒット時のダイアグラム外枠 */
+.kroki-diagram-wrap.is-search-hit {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 4px;
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+}
+
+/* =========================================================
+   3. エラー・警告表示
+   ========================================================= */
+/* Include警告 */
+.adoc-include-warn {
+  padding: 6px 8px;
+  margin: 6px 0;
+  background: #5a3b00;
+  color: #ffd28a;
+  border-left: 4px solid #ff9800;
+  font-family: var(--font-monospace);
+  font-size: 0.9em;
+}
+
+/* 一般エラー */
+.adoc-error {
+  white-space: pre-wrap;
+  font-family: var(--font-monospace); /* 整理：変数を活用 */
+  padding: 12px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+  border-radius: 8px;
+}
+
+/* Kroki専用エラー */
+.kroki-error {
+  margin: 0.75rem 0;
+  padding: 0.75rem;
+  border: 1px solid var(--color-red);
+  border-radius: 8px;
+  background: var(--background-primary);
+}
+
+.kroki-error__head {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+
+.kroki-error__meta {
+  opacity: 0.75;
+  font-size: 0.9em;
+}
+
+.kroki-error__msg {
+  margin-top: 0.5rem;
+  white-space: pre-wrap;
+}
+
+.kroki-error__src {
+  margin-top: 0.5rem;
+  max-height: 240px;
+  overflow: auto;
+  padding: 0.5rem;
+  background: var(--background-secondary);
+  border-radius: 6px;
+}
+
+/* =========================================================
+   4. UI コンポーネント (検索・ステータス・ズーム)
+   ========================================================= */
+/* ステータスバー・バッジ */
+.asciidoc-preview-status {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 8px 0 12px;
+}
+
+/* バッジを強めに（クリックできる見た目に） */
+.adoc-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+
+  border: 1px solid var(--background-modifier-border);
+  box-shadow: 0 1px 6px rgba(0,0,0,.18);
+  cursor: pointer;
+  user-select: none;
+  transition: transform .08s ease, filter .12s ease, box-shadow .12s ease;
+}
+
+.adoc-mode-badge:hover {
+  filter: brightness(1.05);
+  box-shadow: 0 2px 10px rgba(0,0,0,.24);
+}
+
+.adoc-mode-badge:active {
+  transform: translateY(1px) scale(0.99);
+}
+
+/* Follow / Pinned を色で明確に区別 */
+.adoc-mode-badge.is-follow {
+  background: color-mix(in srgb, var(--color-accent) 18%, var(--background-secondary));
+  border-color: color-mix(in srgb, var(--color-accent) 55%, var(--background-modifier-border));
+}
+
+.adoc-mode-badge.is-follow::before {
+  content: "●";
+  font-size: 10px;
+  color: var(--color-accent);
+}
+
+/* Pinned は “固定感” を強調（明確に別色） */
+.adoc-mode-badge.is-pinned {
+  background: color-mix(in srgb, var(--color-yellow) 18%, var(--background-secondary));
+  border-color: color-mix(in srgb, var(--color-yellow) 60%, var(--background-modifier-border));
+}
+
+.adoc-mode-badge.is-pinned::before {
+  content: "📌";
+  font-size: 12px;
+  line-height: 1;
+}
+
+/* フォーカス見た目（キーボード操作向け） */
+.adoc-mode-badge:focus {
+  outline: 3px solid color-mix(in srgb, var(--color-accent) 35%, transparent);
+  outline-offset: 2px;
+}
+
+/* ファイル名は控えめに */
+.adoc-mode-file {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+/* 検索バー */
+.asciidoc-preview-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+  font-size: 12px;
+}
+
+.asciidoc-preview-search input,
+.asciidoc-preview-search button,
+.kroki-search-mode button,
+.kroki-zoom-ui button {
+  padding: 2px 8px;
+  font-size: 12px;
+  border-radius: 6px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+}
+
+.asciidoc-preview-search input {
+  width: 280px;
+}
+
+.kroki-search-mode button.is-active {
+  background: var(--color-accent);
+  color: var(--text-on-accent);
+  border-color: transparent;
+}
+
+.kroki-search-counter {
+  margin-left: 6px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+/* ズームUI */
+.kroki-zoom-ui {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 12px;
+}
+
+.kroki-zoom-ui input[type="range"] {
+  width: 120px;
+}
+
+/* =========================================================
+   5. SVG / 検索ハイライト設定 (text & rect)
+   ========================================================= */
+.kroki-search-index {
+  opacity: 0;
+  height: 0;
+  overflow: hidden;
+  white-space: pre-wrap;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* 文字ハイライト */
+.kroki-svg-hit, .kroki-svg-text-hit {
+  fill: var(--color-accent) !important;
+  font-weight: 800 !important;
+}
+
+.kroki-svg-current {
+  text-decoration: underline;
+}
+
+/* 背景(rect)ハイライト */
+.kroki-svg-rect-hit, .kroki-svg-rect-current {
+  stroke: var(--color-accent) !important;
+}
+
+.kroki-svg-rect-hit {
+  fill: color-mix(in srgb, var(--color-accent) var(--kroki-hl-bg), transparent) !important;
+  stroke-width: var(--kroki-hl-stroke) !important;
+}
+
+.kroki-svg-rect-current {
+  fill: color-mix(in srgb, var(--color-accent) var(--kroki-hl-bg-current), transparent) !important;
+  stroke-width: var(--kroki-hl-stroke-current) !important;
+}
+
+/* ===== current を一瞬フラッシュ ===== */
+
+/* SVGのtextをフラッシュ */
+.kroki-svg-current.kroki-flash {
+  animation: krokiFlashText 0.6s ease-in-out 1;
+}
+
+/* 背景rectをフラッシュ（より目立つ） */
+.kroki-svg-rect-current.kroki-flash {
+  animation: krokiFlashRect 0.7s ease-in-out 1;
+}
+
+/* 図モード（wrapの current）をフラッシュ */
+.kroki-diagram-wrap.is-search-current.kroki-flash {
+  animation: krokiFlashWrap 0.7s ease-in-out 1;
+}
+
+@keyframes krokiFlashText {
+  0%   { filter: brightness(1.0); }
+  25%  { filter: brightness(1.8); }
+  50%  { filter: brightness(1.0); }
+  75%  { filter: brightness(1.8); }
+  100% { filter: brightness(1.0); }
+}
+
+@keyframes krokiFlashRect {
+  0%   { opacity: 1; }
+  25%  { opacity: 0.25; }
+  50%  { opacity: 1; }
+  75%  { opacity: 0.25; }
+  100% { opacity: 1; }
+}
+
+@keyframes krokiFlashWrap {
+  0%   { outline-offset: 4px; filter: brightness(1.0); }
+  25%  { outline-offset: 10px; filter: brightness(1.2); }
+  50%  { outline-offset: 4px; filter: brightness(1.0); }
+  75%  { outline-offset: 10px; filter: brightness(1.2); }
+  100% { outline-offset: 4px; filter: brightness(1.0); }
+}
+
+/* =========================================================
+   6. .adoc 編集時：エディタのプレーン化 (Markdown装飾リセット)
+   ========================================================= */
+body.adoc-active .markdown-source-view.mod-cm6 .cm-editor,
+body.adoc-active .markdown-source-view.mod-cm6 .cm-scroller,
+body.adoc-active .markdown-source-view.mod-cm6 .cm-content,
+body.adoc-active .markdown-source-view.mod-cm6 .cm-line,
+body.adoc-active .markdown-source-view.mod-cm6 .cm-line * {
+  color: inherit !important;
+  font-weight: 400 !important;
+  font-style: normal !important;
+  text-decoration: none !important;
+  font-size: var(--font-text-size) !important;
+  line-height: 1.5 !important;
+}
+
+/* セレクタを統合し、Markdown特有のスタイルを強制リセット */
+body.adoc-active .markdown-source-view.mod-cm6 :is(
+  .cm-header, .cm-strong, .cm-em, .cm-link, .cm-url, 
+  .cm-hmd-internal-link, .cm-formatting, .cm-quote, .cm-list, .cm-underline,
+  strong, em
+) {
+  color: inherit !important;
+  font-weight: inherit !important;
+  font-style: inherit !important;
+  text-decoration: none !important;
+  font-size: inherit !important;
+}
