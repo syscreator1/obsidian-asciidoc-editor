@@ -154,3 +154,9 @@ consistency and long-term maintainability over popularity.
 
 To deploy directly into your vault during development, copy `.env.example` to `.env` and set `OBSIDIAN_PLUGIN_DIR`.
 
+---
+
+## License
+
+Licensed under the Apache License, Version 2.0.  
+See the [LICENSE](./LICENSE) file for details.
