@@ -18,7 +18,7 @@ export async function renderWithCache(
   format: KrokiFormat,
   source: string,
 ): Promise<RenderResult> {
-  const cacheKey = sha256Hex(`${diagramType}\n${format}\n${source}`); // ここがキモ
+  const cacheKey = sha256Hex(`${diagramType}\n${format}\n${source}`);
   const hit = cache.items[cacheKey];
   if (hit) {
     return { mime: hit.mime, data: fromBase64(hit.base64), cacheKey };

@@ -31,7 +31,7 @@ export class AsciidocPreviewView extends FileView {
   private zoomSlider: HTMLInputElement | null = null;
   private zoomLabel: HTMLSpanElement | null = null;
 
-  // 競合防止：レンダー世代
+  // Conflict prevention: render generation counter
   private renderSeq = 0;
 
   // debounce
@@ -76,7 +76,7 @@ export class AsciidocPreviewView extends FileView {
     const wraps = container.querySelectorAll<HTMLElement>(".kroki-diagram-wrap");
 
     wraps.forEach((wrap) => {
-      // すでに付いてたら二重登録しない（renderごとにDOMが変わるので保険）
+      // Avoid double-binding if already attached (DOM changes on each render, so this is a safeguard)
       if ((wrap as any).__krokiPanBound) return;
       (wrap as any).__krokiPanBound = true;
 
@@ -92,7 +92,7 @@ export class AsciidocPreviewView extends FileView {
   };
 
   private onPreviewMouseMove = (ev: MouseEvent) => {
-    // 左ボタン押下中だけ
+    // Only while the left button is pressed
     if ((ev.buttons & 1) === 0) return;
 
     const dx = Math.abs(ev.clientX - this.downX);
@@ -106,10 +106,10 @@ export class AsciidocPreviewView extends FileView {
     const t = ev.target as HTMLElement | null;
     if (!t) return;
 
-    // ★A方針：図の上では「クリックでもドラッグでも」Editorに戻さない
+    // ★Policy A: On diagrams, do not return to the Editor on either click or drag
     if (t.closest(".kroki-diagram-wrap")) return;
 
-    // 図の外（Preview背景など）の“クリック”だけ戻す（ここがAの肝）
+    // Only return on a "click" outside diagrams (Preview background, etc.) — this is the key of Policy A
     if (this.moved) return;
 
     if (this.followActiveEditor && this.lastEditorLeaf) {
@@ -118,18 +118,18 @@ export class AsciidocPreviewView extends FileView {
   };
 
   private onPanMouseDown = (ev: MouseEvent) => {
-    // 左クリックのみ
+    // Left click only
     if (ev.button !== 0) return;
 
     this.isPanning = true;
 
-    // ★パン中はPreviewをアクティブにする（イベントを確実に拾う）
+    // ★Make the Preview active while panning (to reliably receive events)
     this.app.workspace.setActiveLeaf(this.leaf, { focus: true });
 
     const target = ev.target as HTMLElement | null;
     if (!target) return;
 
-    // 操作系（リンク、ボタン、入力、SVG内リンク等）はパンしない
+    // Do not pan on interactive elements (links, buttons, inputs, links inside SVG, etc.)
     const interactive = target.closest(
       'a, button, input, textarea, select, summary, details, [role="button"], [contenteditable="true"]'
     );
@@ -138,7 +138,7 @@ export class AsciidocPreviewView extends FileView {
     const wrap = (target.closest(".kroki-diagram-wrap") as HTMLElement | null);
     if (!wrap) return;
 
-    // ここでパン開始
+    // Start panning here
     this.isPanning = true;
     this.panTarget = wrap;
     this.panStartX = ev.clientX;
@@ -148,7 +148,7 @@ export class AsciidocPreviewView extends FileView {
 
     wrap.classList.add("is-panning");
 
-    // Obsidianのフォーカス/選択を抑止
+    // Prevent Obsidian focus/selection behavior
     ev.preventDefault();
     ev.stopPropagation();
 
@@ -162,7 +162,7 @@ export class AsciidocPreviewView extends FileView {
     const dx = ev.clientX - this.panStartX;
     const dy = ev.clientY - this.panStartY;
 
-    // ドラッグ方向と逆にスクロール
+    // Scroll in the opposite direction of the drag
     this.panTarget.scrollLeft = this.panStartScrollLeft - dx;
     this.panTarget.scrollTop = this.panStartScrollTop - dy;
 
@@ -187,20 +187,20 @@ export class AsciidocPreviewView extends FileView {
   
 
   private onPreviewWheel = (ev: WheelEvent) => {
-    // Ctrl + ホイールだけ拾う（普通スクロールは邪魔しない）
+    // Only handle Ctrl + wheel (do not interfere with normal scrolling)
     if (!ev.ctrlKey) return;
 
-    // ブラウザズーム等を抑止
+    // Prevent browser zoom, etc.
     ev.preventDefault();
     ev.stopPropagation();
 
-    // wheel: 下で縮小 / 上で拡大 にする（好みで逆でもOK）
+    // wheel: down to zoom out / up to zoom in (feel free to invert if preferred)
     const delta = ev.deltaY;
-    const step = ev.shiftKey ? 0.2 : 0.1; // Shift押しながらで大きく
+    const step = ev.shiftKey ? 0.2 : 0.1; // Larger step while holding Shift
 
     let scale = this.zoomScale + (delta > 0 ? -step : step);
 
-    // 50%〜200%（スライダーと同じ範囲）
+    // 50% to 200% (same range as the slider)
     scale = Math.max(0.5, Math.min(2.0, scale));
 
     this.setZoomScale(scale);
@@ -219,7 +219,7 @@ export class AsciidocPreviewView extends FileView {
   }
 
   async setState(state: any, result: any): Promise<void> {
-    // ★ follow 状態の復元
+    // ★Restore "follow" state
     if (typeof state?.follow === "boolean") {
       this.followActiveEditor = state.follow;
     }
@@ -228,7 +228,7 @@ export class AsciidocPreviewView extends FileView {
       this.shouldReturnFocusOnOpen = state.returnToEditor;
     }
 
-    // ★ file の復元
+    // ★Restore file
     if (state?.file && typeof state.file === "string") {
       const af = this.app.vault.getAbstractFileByPath(state.file);
       if (af instanceof TFile) {
@@ -254,13 +254,13 @@ export class AsciidocPreviewView extends FileView {
   }
 
   async onOpen(): Promise<void> {
-    // container は一度だけ作って使い回す
+    // Create the container only once and reuse it
     this.contentEl.empty();
 
-    // root（固定UI + 内容領域を分離）
+    // root (separate fixed UI from the content area)
     this.rootEl = this.contentEl.createDiv({ cls: "asciidoc-preview-root" });
 
-    // ===== Search UI（固定）=====
+    // ===== Search UI (fixed) =====
     this.searchEl = this.rootEl.createDiv({ cls: "asciidoc-preview-search" });
 
     this.searchInput = this.searchEl.createEl("input", {
@@ -314,7 +314,7 @@ export class AsciidocPreviewView extends FileView {
       }
     };
 
-    // 設定のデフォルトズームを適用（50〜200）
+    // Apply the default zoom from settings (50–200)
     const pct = Math.max(50, Math.min(200, this.plugin.settings.zoomDefaultPct ?? 100));
     this.zoomScale = pct / 100;
 
@@ -327,11 +327,11 @@ export class AsciidocPreviewView extends FileView {
     btnBlock.onclick = () => {
       this.searchMode = "block";
       updateModeUi();
-      // モード切替時は同じクエリで再検索
+      // Re-run search with the same query when switching modes
       const q = this.searchInput?.value ?? "";
       this.runDiagramSearch(q);
       this.clearSvgHighlights();
-      this.updateCounter(); // counterは文字モード用なら0/0になる
+      this.updateCounter(); // In text-mode-only counter, this becomes 0/0
     };
 
     btnText.onclick = () => {
@@ -371,7 +371,7 @@ export class AsciidocPreviewView extends FileView {
       if (this.searchMode === "block") {
         this.clearSvgHighlights();
         this.runDiagramSearch(q);
-        // 図モードで件数も出したいなら、別カウンタを作る（今は文字用なので0/0でもOK）
+        // If you want counts in diagram mode too, add a separate counter (0/0 is fine for now)
         this.updateCounter();
       } else {
         this.clearDiagramSearch();
@@ -400,7 +400,7 @@ export class AsciidocPreviewView extends FileView {
       this.clearDiagramSearch();
     };
 
-    // ===== Preview content（ここだけ renderImpl が書き換える）=====
+    // ===== Preview content (only this area is replaced by renderImpl) =====
     this.previewEl = this.rootEl.createDiv({ cls: "asciidoc-preview" });
     this.previewEl.addEventListener("mousedown", this.onPreviewMouseDown, true);
     this.previewEl.addEventListener("mousemove", this.onPreviewMouseMove, true);
@@ -409,11 +409,11 @@ export class AsciidocPreviewView extends FileView {
 
     this.containerEl.addEventListener("mouseup", this.onLeafMouseUp, true);
 
-    // ★ 状態バッジ（Follow / Pinned）
+    // ★Status badge (Follow / Pinned)
     this.statusEl = this.searchEl.createDiv({ cls: "asciidoc-preview-status" });
     this.updateStatusBadge();
 
-     // modify は TAbstractFile が来るのでそれで受ける
+     // "modify" provides a TAbstractFile, so accept that type
     this.modifyHandler = (af: TAbstractFile) => {
       const p = (af as any)?.path as string | undefined;
       if (!p) return;
@@ -441,12 +441,12 @@ export class AsciidocPreviewView extends FileView {
 
       if (!this.followActiveEditor) return;
 
-      // 自分自身がアクティブになった場合は無視（無限ループ防止）
+      // Ignore when this view becomes active (prevent infinite loops)
       if (activeLeaf.view === this) return;
 
       const file = this.app.workspace.getActiveFile();
       if (file && file.extension.toLowerCase() === "adoc") {
-        // 同じファイルなら何もしない
+        // If it's the same file, do nothing
         if (this.currentFile?.path === file.path) return;
         void this.loadFile(file);
       }
@@ -462,7 +462,7 @@ export class AsciidocPreviewView extends FileView {
       }
     });
 
-    // ★ 初期追従：開いた瞬間にアクティブな .adoc を掴む
+    // ★Initial follow: capture the currently active .adoc when the view opens
     if (this.followActiveEditor && !this.currentFile) {
       const f = this.app.workspace.getActiveFile();
       if (f && f.extension.toLowerCase() === "adoc") {
@@ -470,7 +470,7 @@ export class AsciidocPreviewView extends FileView {
       }
     }
 
-    // ★ Previewを開いた直後はPreview leafがアクティブになりがちなので editor に戻す
+    // ★Right after opening the Preview, the Preview leaf tends to become active, so return focus to the editor
     if (this.shouldReturnFocusOnOpen && this.lastEditorLeaf) {
       window.setTimeout(() => {
         if (this.lastEditorLeaf) {
@@ -479,7 +479,7 @@ export class AsciidocPreviewView extends FileView {
       }, 0);
     }
 
-    // 初期描画（すでに currentFile がセット済みなら）
+    // Initial render (if currentFile is already set)
     this.queueRender(0);
   }
 
@@ -523,7 +523,7 @@ export class AsciidocPreviewView extends FileView {
     const r = this.svgHitRects[this.svgHitIndex] ?? null;
     if (!t) return;
 
-    // ★中央へ寄せて、見えたらフラッシュ（すでにあなたの実装がある前提）
+    // ★Center it, then flash when visible (assumes your existing implementation)
     this.scrollSvgHitIntoView(t, r);
   }
 
@@ -601,10 +601,10 @@ export class AsciidocPreviewView extends FileView {
   }
 
   private scrollAndFlashDiagramHit(el: HTMLElement) {
-    // current付与は呼び出し側でOK（ここではやらない）
+    // Adding "current" is handled by the caller (not here)
     el.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
 
-    // ★見えるようになってからフラッシュ
+    // ★Flash after it becomes visible
     this.flashWhenVisibleInPreview(el, 1200);
   }
 
@@ -613,14 +613,14 @@ export class AsciidocPreviewView extends FileView {
     const el = this.searchHits[this.searchIndex];
     if (!el) return;
 
-    // ★中央へ
+    // ★Center it
     el.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
 
-    // ★見えたらフラッシュ
+    // ★Flash when visible
     this.flashWhenVisibleInPreview(el, 1200);
   }
 
-  /** render の入口はここだけにする（debounce） */
+  /** The render entry point is only here (debounced) */
   private queueRender(delayMs = 120) {
     if (this.renderTimer !== null) window.clearTimeout(this.renderTimer);
     this.renderTimer = window.setTimeout(() => {
@@ -629,7 +629,7 @@ export class AsciidocPreviewView extends FileView {
     }, delayMs);
   }
 
-  /** 実レンダー（競合防止付き） */
+  /** Actual render (with conflict prevention) */
   private async renderImpl(): Promise<void> {
     const container = this.previewEl;
     if (!container) return;
@@ -644,13 +644,13 @@ export class AsciidocPreviewView extends FileView {
     try {
       const result = await renderAsciidocToHtml(this.app, this.plugin, this.currentFile);
 
-      // 古い render 結果は捨てる
+      // Discard stale render results
       if (seq !== this.renderSeq) return;
 
       this.deps = new Set(result.deps ?? []);
       container.innerHTML = result.html ?? "";
 
-      // パン用イベントを付与（図が再描画されても動くように）
+      // Attach pan handlers (so it keeps working even after re-render)
       this.bindPanHandlers(container);
 
       if (this.searchInput) this.searchInput.value = "";
@@ -674,7 +674,7 @@ export class AsciidocPreviewView extends FileView {
     if (this.zoomSlider) this.zoomSlider.value = String(pct);
     if (this.zoomLabel) this.zoomLabel.setText(`${pct}%`);
 
-    // 最後に使った値として保存（好みでON/OFF可能）
+    // Save as the last used value (can be toggled ON/OFF if desired)
     this.plugin.settings.zoomDefaultPct = Math.round(this.zoomScale * 100);
     void this.plugin.saveSettings();
 
@@ -682,51 +682,51 @@ export class AsciidocPreviewView extends FileView {
   }
 
   // private onPreviewMouseDown = (ev: MouseEvent) => {
-  //   // パン中/パン開始はEditorに戻さない（パンが潰れるので）
+  //   // While panning / starting to pan, do not return to the Editor (it would break panning)
   //   if (this.isPanning) return;
 
-  //   // Follow ON のときだけ（Pinned で触れないのは不便）
+  //   // Only when Follow is ON (it's inconvenient if you can't interact while Pinned)
   //   if (!this.followActiveEditor) return;
 
-  //   // すでに editor が分かっている時だけ
+  //   // Only if we already know the editor leaf
   //   if (!this.lastEditorLeaf) return;
 
   //   const t = ev.target as HTMLElement | null;
   //   if (!t) return;
 
-  //   // 図の上での操作は、パン等のためEditorに戻さない
+  //   // Do not return to the Editor when interacting on the diagram (for panning etc.)
   //   if (t.closest(".kroki-diagram-wrap")) return;
 
-  //   // クリック対象が操作系ならフォーカスを奪わない
-  //   // （リンク、ボタン、入力、詳細、要素内のクリックなど）
+  //   // If the click target is interactive, do not steal focus
+  //   // (links, buttons, inputs, details, clicks inside elements, etc.)
   //   const interactive = t.closest(
   //     'a, button, input, textarea, select, summary, details, [role="button"], [contenteditable="true"]'
   //   );
   //   if (interactive) return;
 
-  //   // 左クリックのみ（右クリックメニューなどを壊さない）
+  //   // Left click only (do not break context menus, etc.)
   //   if (ev.button !== 0) return;
 
-  //   // Preview がアクティブになる前に editor へ戻す
+  //   // Return to the editor before the Preview becomes active
   //   this.app.workspace.setActiveLeaf(this.lastEditorLeaf, { focus: true });
   // };
 
   private onLeafMouseUp = (ev: MouseEvent) => {
-    // パン中/パン開始はEditorに戻さない（パンが潰れるので）
+    // While panning / starting to pan, do not return to the Editor (it would break panning)
     if (this.isPanning) return;
 
     if (!this.followActiveEditor) return;
 
-    // 左クリックだけ
+    // Left click only
     if (ev.button !== 0) return;
 
     const t = ev.target as HTMLElement | null;
     if (!t) return;
 
-    // 図の上での操作は、パン等のためEditorに戻さない
+    // Do not return to the Editor when interacting on the diagram (for panning etc.)
     if (t.closest(".kroki-diagram-wrap")) return;
 
-    // 操作系は戻さない（リンク等を壊さない）
+    // Do not return on interactive elements (do not break links, etc.)
     const interactive = t.closest(
       'a, button, input, textarea, select, summary, details, [role="button"], [contenteditable="true"]'
     );
@@ -735,7 +735,7 @@ export class AsciidocPreviewView extends FileView {
     const editorLeaf = this.findEditorLeafForCurrentFile() ?? this.lastEditorLeaf;
     if (!editorLeaf) return;
 
-    // Obsidianに勝つため次フレームで戻す（rAF×2）
+    // Return in the next frame to beat Obsidian's focus handling (double rAF)
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         this.app.workspace.setActiveLeaf(editorLeaf, { focus: true });
@@ -761,7 +761,7 @@ export class AsciidocPreviewView extends FileView {
     badge.setAttr("tabindex", "0");
     badge.setAttr("aria-label", "Toggle Follow / Pinned");
 
-    // ★クリックで切替
+    // ★Toggle on click
     const toggle = () => {
       this.followActiveEditor = !this.followActiveEditor;
       this.updateStatusBadge();
@@ -775,8 +775,8 @@ export class AsciidocPreviewView extends FileView {
         });
       }
 
-      // 状態を保存したいなら state に持たせる／settings に持たせる
-      // （今は view state の follow で復元しているので不要ならこのままでOK）
+      // If you want to persist state, store it in view state / settings
+      // (Currently restored via view state's follow, so leaving as-is is fine)
     };
 
     badge.addEventListener("click", (ev) => {
@@ -792,7 +792,7 @@ export class AsciidocPreviewView extends FileView {
       toggle();
     });
 
-    // お好みで、表示中のファイル名も出す
+    // Optionally display the current file name as well
     if (this.currentFile) {
       const file = this.statusEl.createSpan({ cls: "adoc-mode-file" });
       file.setText(this.currentFile.name);
@@ -832,7 +832,7 @@ export class AsciidocPreviewView extends FileView {
         wrap.classList.add("is-search-hit");
         this.searchHits.push(wrap);
 
-        // ★ヒット語バッジを付与（見えるハイライト）
+        // ★Attach a hit badge (visible highlight)
         this.attachHitBadge(wrap, this.lastQuery);
       }
     }
@@ -860,16 +860,16 @@ export class AsciidocPreviewView extends FileView {
   }
 
   private setCurrentHit(el: HTMLElement) {
-    // いったん全て解除
+    // Clear all first
     this.searchHits.forEach((h) => h.classList.remove("is-search-current"));
     el.classList.add("is-search-current");
   }
 
   private clearDiagramSearch() {
-    // 枠解除
+    // Remove frames
     this.searchHits.forEach((el) => el.classList.remove("is-search-hit", "is-search-current"));
 
-    // バッジ削除
+    // Remove badges
     const badges = this.previewEl?.querySelectorAll(".kroki-hit-badge");
     badges?.forEach((b) => b.remove());
 
@@ -883,14 +883,14 @@ export class AsciidocPreviewView extends FileView {
   }
 
   private attachHitBadge(wrap: HTMLElement, query: string) {
-    // すでに付いていれば付け直し
+    // If already present, re-attach
     wrap.querySelector(".kroki-hit-badge")?.remove();
 
     const badge = document.createElement("div");
     badge.className = "kroki-hit-badge";
     badge.innerHTML = this.buildHighlightedText(`Hit: ${query}`, query);
 
-    // wrap の先頭に挿入（図の上に出る）
+    // Insert at the beginning of wrap (shown above the diagram)
     wrap.prepend(badge);
   }
 
@@ -899,13 +899,13 @@ export class AsciidocPreviewView extends FileView {
     const q = (query ?? "").trim();
     if (!q) return this.escapeHtmlForUi(t);
 
-    // 大文字小文字無視で <mark> を入れる
+    // Insert <mark> case-insensitively
     const re = new RegExp(this.escapeRegExp(q), "ig");
     const escaped = this.escapeHtmlForUi(t);
 
-    // escaped済み文字列に対して mark を入れるのは安全にやる必要があるので、
-    // ここは単純化：表示文に query をそのまま入れているだけなので置換対象は query 部分だけ。
-    // （一般化したいなら TextNode 分割方式にします）
+    // Adding marks to an already-escaped string must be done carefully.
+    // Here we keep it simple: the display text only embeds the query, so we only replace the query part.
+    // (If you want to generalize, switch to a TextNode-splitting approach.)
     return escaped.replace(re, (m) => `<mark>${m}</mark>`);
   }
 
@@ -940,7 +940,7 @@ export class AsciidocPreviewView extends FileView {
         t.classList.add("kroki-svg-text-hit");
         this.svgHitTexts.push(t);
 
-        // ★ 背景は「親グループ内の rect」を塗る（BBox不要で確実）
+        // ★Fill the background by coloring the <rect> within the same parent group (reliable without BBox)
         const rect = this.findHighlightRectForText(t);
         if (rect) rect.classList.add("kroki-svg-rect-hit");
         this.svgHitRects.push(rect);
@@ -959,19 +959,19 @@ export class AsciidocPreviewView extends FileView {
   }
 
   private findHighlightRectForText(textEl: SVGTextElement): SVGRectElement | null {
-    // 典型：<g class="cluster">...<rect>...<text>...</g>
-    // 近い祖先から rect を探す
+    // Typical structure: <g class="cluster">...<rect>...<text>...</g>
+    // Walk up from the closest ancestors and look for a rect
     let el: Element | null = textEl;
 
     for (let i = 0; i < 6 && el; i++) {
-      // その階層内の最初の rect を候補にする
+      // Use the first rect in this subtree as a candidate
       const rect = el.querySelector?.("rect") as SVGRectElement | null;
       if (rect) return rect;
 
       el = el.parentElement;
     }
 
-    // fallback：同じ親の直前/直後を探す（稀）
+    // Fallback: look around the same parent (rare)
     const parent = textEl.parentElement;
     if (parent) {
       const sibRect = parent.querySelector("rect") as SVGRectElement | null;
@@ -1017,7 +1017,7 @@ export class AsciidocPreviewView extends FileView {
   private scrollSvgHitIntoView(textEl: SVGTextElement, rectEl?: SVGRectElement | null) {
     const wrap = (textEl as any).closest?.(".kroki-diagram-wrap") as HTMLElement | null;
     if (!wrap) {
-      // fallback（効けばOK）
+      // fallback (good enough if it works)
       (textEl as any).scrollIntoView?.({ behavior: "smooth", block: "center" });
       requestAnimationFrame(() => {
         this.flashEl(textEl);
@@ -1026,19 +1026,19 @@ export class AsciidocPreviewView extends FileView {
       return;
     }
 
-    // ★まず図（wrap）自体を Preview の中央に持ってくる（縦位置）
+    // ★First, bring the diagram container (wrap) into the center of the Preview (vertical position)
     wrap.scrollIntoView({ behavior: "smooth", block: "center" });
 
-    // ★次に wrap の中で text の位置へ、上下左右とも中央に寄せる
+    // ★Then, within the wrap, center the text position both horizontally and vertically
     const wrapRect = wrap.getBoundingClientRect();
     const textRect = (textEl as any).getBoundingClientRect?.() as DOMRect | undefined;
     if (!textRect) return;
 
-    // wrap 内座標へ変換（現在の scroll を加味）
+    // Convert to wrap-local coordinates (taking current scroll into account)
     const xInWrap = (textRect.left - wrapRect.left) + wrap.scrollLeft;
     const yInWrap = (textRect.top - wrapRect.top) + wrap.scrollTop;
 
-    // 中央にしたい目標スクロール位置
+    // Target scroll position to center the element
     const targetLeft = xInWrap - wrap.clientWidth / 2;
     const targetTop  = yInWrap - wrap.clientHeight / 2;
 
@@ -1089,13 +1089,13 @@ export class AsciidocPreviewView extends FileView {
     if (!el) return;
     el.classList.remove(className);
 
-    // ★同じ要素を連続でフラッシュできるように reflow
+    // ★Force reflow so the same element can be flashed repeatedly
     // eslint-disable-next-line @typescript-eslint/no-unused-expressions
     (el as any).getBoundingClientRect?.();
 
     el.classList.add(className);
 
-    // animation 1回で外す（安全策）
+    // Remove after one animation cycle (safety)
     window.setTimeout(() => {
       el.classList.remove(className);
     }, 900);
@@ -1106,7 +1106,7 @@ export class AsciidocPreviewView extends FileView {
     const er = (el as any).getBoundingClientRect?.() as DOMRect | undefined;
     if (!er) return false;
 
-    // wrapの表示領域と要素の矩形が交差していれば「見えている」
+    // Consider it "visible" if the element rectangle intersects the wrap viewport
     const inter =
       er.right > wr.left &&
       er.left < wr.right &&
@@ -1117,14 +1117,14 @@ export class AsciidocPreviewView extends FileView {
   }
 
   /**
-   * smooth scroll の最中でもOK。
-   * - wrap内で target が「見える」状態になったらフラッシュ
-   * - timeout で諦める（無限待ち防止）
+   * Works even during smooth scrolling.
+   * - Flash once the target becomes "visible" within the wrap viewport
+   * - Give up after timeout (prevents infinite waiting)
    */
   private flashWhenVisible(params: {
     wrap: HTMLElement;
     target: Element | null;
-    also?: Element | null;          // rectなど一緒にフラッシュしたいもの
+    also?: Element | null;          // e.g. rect to flash together
     timeoutMs?: number;
   }) {
     const { wrap, target, also, timeoutMs = 1200 } = params;
@@ -1133,11 +1133,11 @@ export class AsciidocPreviewView extends FileView {
     const start = performance.now();
 
     const tick = () => {
-      // renderでDOMが差し替わった等の安全策
+      // Safety: DOM might have been replaced by a render
       if (!document.contains(target)) return;
 
       if (this.isInWrapViewport(wrap, target)) {
-        // ★見える状態になった「次のフレーム」でフラッシュ
+        // ★Flash on the next frame after it becomes visible
         requestAnimationFrame(() => {
           this.flashEl(target);
           if (also) this.flashEl(also);
@@ -1146,7 +1146,7 @@ export class AsciidocPreviewView extends FileView {
       }
 
       if (performance.now() - start > timeoutMs) {
-        // タイムアウトしたら一応フラッシュ（見えてなくても）
+        // On timeout, flash anyway (even if not visible)
         this.flashEl(target);
         if (also) this.flashEl(also);
         return;

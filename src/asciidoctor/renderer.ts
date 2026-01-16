@@ -10,7 +10,7 @@ export type RenderResult = {
 };
 
 type IncludeOpts = {
-  leveloffset?: number; // 累積対象
+  leveloffset?: number; // Accumulates and propagates
   lines?: string; // "2;5..6" etc
   tag?: string;
   tags?: string[];
@@ -21,21 +21,21 @@ type IncludeOpts = {
 let _adoc: any | null = null;
 
 export async function renderAsciidocToHtml(app: App, plugin: AsciiDocPlugin, file: TFile): Promise<RenderResult> {
-  // 反映確認
+  // Verify that changes are applied
   console.log("[asciidoc-editor] renderer.ts ACTIVE v2");
 
   const src = await app.vault.read(file);
 
-  // include 展開（AsciiDoc段階で完了）
+  // Expand includes (completed at the AsciiDoc stage)
   const { masked, map } = maskDiagramBlocks(src);
 
-  // ② 図ブロック以外の include:: だけ展開
+  // ② Expand include:: directives except inside diagram blocks
   const deps = new Set<string>();
   deps.add(file.path);
 
   const expandedMasked = await expandVaultIncludes(app, masked, file.path, deps, 0, 30, { leveloffset: 0 });
 
-  // ③ 図ブロックを元に戻す（PlantUML内の include:: はそのまま残る）
+  // ③ Restore diagram blocks (include:: inside PlantUML remains as-is)
   const expanded = unmaskDiagramBlocks(expandedMasked, map);
 
   const withDiagrams = await preprocessDiagrams(plugin, app, file, deps, expanded);
@@ -119,9 +119,9 @@ function getAdoc(): any {
 
 /** -----------------------------
  *  Include expansion
- *  - include::...[] が改行で分断されても `]` まで結合してから処理する
- *  - lines/tag/tags/indent は「展開前」（元ファイル基準）に適用
- *  - leveloffset は親→子に累積伝播し、挿入ブロックに1回だけ適用（2重適用しない）
+ *  - If include::...[] is split across lines, join until `]` before processing
+ *  - Apply lines/tag/tags/indent BEFORE expanding (based on the original file)
+ *  - leveloffset accumulates from parent to child, and is applied once to the inserted block (avoid double-apply)
  * ----------------------------- */
 async function expandVaultIncludes(
   app: App,
@@ -136,7 +136,7 @@ async function expandVaultIncludes(
     return `\n// [include] maxDepth reached (${maxDepth}) at ${currentFilePath}\n` + text;
   }
 
-  // ★重要：includeマクロが改行で分割されている場合に備え、] まで結合する
+  // ★Important: join include macros that are broken across lines (until `]`)
   text = joinBrokenIncludeMacros(text);
 
   // include::path[opts]
@@ -155,7 +155,7 @@ async function expandVaultIncludes(
     const opts = parseIncludeOpts((m[2] ?? "") as string);
     console.log("[asciidoc-editor] include opts =>", opts);
 
-    // foo.adoc#something は今回は無視（#以降を落とす）
+    // Ignore foo.adoc#something for now (drop the #... part)
     const rawTarget = ((rawTarget0.split("#")[0] ?? "") as string).trim();
     const resolved = resolveVaultPath(currentFilePath, rawTarget);
     const af = resolved ? app.vault.getAbstractFileByPath(resolved) : null;
@@ -170,13 +170,13 @@ async function expandVaultIncludes(
 
     deps.add(af.path);
 
-    // 1) 読む（元ファイル）
+    // 1) Read (original file)
     let included = await app.vault.read(af);
 
-    // 2) lines/tag/tags/indent は「展開前」に適用（元ファイル基準）
+    // 2) Apply lines/tag/tags/indent BEFORE expansion (based on the original file)
     included = applyIncludeOptionsBeforeExpand(included, opts);
 
-    // 3) 子 include 展開：親+自分の leveloffset を累積して伝播
+    // 3) Expand child includes: propagate accumulated leveloffset (parent + current)
     const totalLevelOffset = (inherited.leveloffset ?? 0) + (opts.leveloffset ?? 0);
     console.log("[asciidoc-editor] totalLevelOffset=", totalLevelOffset, "file=", af.path);
 
@@ -190,7 +190,7 @@ async function expandVaultIncludes(
       { leveloffset: totalLevelOffset }
     );
 
-    // 4) leveloffset は「この include が挿入する塊」に1回だけ適用（2重適用しない）
+    // 4) Apply leveloffset once to the inserted block (avoid double-apply)
     if (totalLevelOffset !== 0) {
       console.log("[asciidoc-editor] SHIFT apply:", { file: af.path, totalLevelOffset });
       included = shiftHeadingLevels(included, totalLevelOffset);
@@ -207,11 +207,11 @@ async function expandVaultIncludes(
   return out;
 }
 
-/** include::...[] が改行で分断されても ] まで結合する
- *  例:
+/** Join include::...[] even if it is split across lines until `]`
+ *  Example:
  *    include::parts/intro.adoc[lines=2;5.
  *    .6]
- *  → include::parts/intro.adoc[lines=2;5..6]
+ *  -> include::parts/intro.adoc[lines=2;5..6]
  */
 function joinBrokenIncludeMacros(text: string): string {
   const lines = text.split(/\r?\n/);
@@ -220,19 +220,19 @@ function joinBrokenIncludeMacros(text: string): string {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i] ?? "";
 
-    // include 行っぽいのに ] が無い場合、] が出るまで連結
+    // Looks like an include line but has no closing ] -> concatenate until we find ]
     if (/^[ \t\uFEFF]*include::/i.test(line) && !line.includes("]")) {
       let buf = line;
       let j = i + 1;
       while (j < lines.length) {
         const next = lines[j] ?? "";
-        // 行末コメントなどは考えず、単純に連結（空白は除去）
+        // Concatenate naively (ignore inline comments etc.; strip whitespace)
         buf += next.trim();
         if (buf.includes("]")) break;
         j++;
       }
       out.push(buf);
-      i = j; // ここまで消費
+      i = j; // consumed up to here
       continue;
     }
 
@@ -267,9 +267,9 @@ function parseIncludeOpts(raw: string): IncludeOpts {
   const s = (raw ?? "").trim();
   if (!s) return opts;
 
-  // 例: leveloffset=+1, lines=2;5..6, tags=public;internal, opts=optional
-  // ※ lines の中にも ; があるので、単純 split(/[;,]/) は壊れる
-  // 方針： key=value だけ拾う（value は次の key= が来るまで）
+  // Example: leveloffset=+1, lines=2;5..6, tags=public;internal, opts=optional
+  // Note: lines can also contain ';', so a naive split(/[;,]/) will break.
+  // Approach: capture only key=value pairs (value continues until the next key=)
   const tokens = tokenizeKeyValueOptions(s);
 
   for (const { key, val } of tokens) {
@@ -299,8 +299,8 @@ function parseIncludeOpts(raw: string): IncludeOpts {
 }
 
 /**
- * "lines=2;5..6,leveloffset=+1" のような文字列を
- * [{key:"lines",val:"2;5..6"}, {key:"leveloffset",val:"+1"}] にする
+ * Convert a string like "lines=2;5..6,leveloffset=+1" into:
+ * [{key:"lines",val:"2;5..6"}, {key:"leveloffset",val:"+1"}]
  */
 function tokenizeKeyValueOptions(s: string): Array<{ key: string; val: string }> {
   const res: Array<{ key: string; val: string }> = [];
@@ -321,9 +321,9 @@ function tokenizeKeyValueOptions(s: string): Array<{ key: string; val: string }>
     const next = hits[i + 1];
     let val = s.slice(cur.end, next ? next.idx : s.length).trim();
 
-    // "..., key=VALUE," の末尾区切りだけ落とす
+    // Remove only trailing separators from "..., key=VALUE,"
     val = val.replace(/[,;]+$/, "").trim();
-    // "key=,VALUE" のような変な形だけ先頭区切りを落とす
+    // Remove only leading separators from malformed cases like "key=,VALUE"
     val = val.replace(/^[,;]+\s*/, "");
 
     res.push({ key: cur.key, val });
@@ -334,19 +334,19 @@ function tokenizeKeyValueOptions(s: string): Array<{ key: string; val: string }>
 function applyIncludeOptionsBeforeExpand(text: string, opts: IncludeOpts): string {
   let out = text;
 
-  // lines（元ファイルの行番号基準）
+  // lines (based on original file line numbers)
   if (opts.lines) {
     out = pickLines(out, opts.lines);
   }
 
-  // tag/tags（元ファイルの tag:: / end:: ブロック基準）
+  // tag/tags (based on original file tag:: / end:: blocks)
   if (opts.tag) {
     out = pickTags(out, new Set([opts.tag]));
   } else if (opts.tags && opts.tags.length > 0) {
     out = pickTags(out, new Set(opts.tags));
   }
 
-  // indent（行頭にスペース付与）
+  // indent (prefix each non-empty line with spaces)
   if (typeof opts.indent === "number" && !Number.isNaN(opts.indent) && opts.indent > 0) {
     const pad = " ".repeat(opts.indent);
     out = out
@@ -358,8 +358,8 @@ function applyIncludeOptionsBeforeExpand(text: string, opts: IncludeOpts): strin
   return out;
 }
 
-/** lines=2;5..6 を解釈して行を抽出（1-based, inclusive） */
-/** lines=2;5..6 を解釈して行を抽出（1-based, inclusive） */
+/** Parse lines=2;5..6 and pick lines (1-based, inclusive) */
+/** Parse lines=2;5..6 and pick lines (1-based, inclusive) */
 function pickLines(text: string, spec: string): string {
   const linesArr = text.split(/\r?\n/);
 
@@ -390,7 +390,7 @@ function pickLines(text: string, spec: string): string {
     }
   }
 
-  // ---- 飛び飛び抽出の境界に空行を入れてブロックを切る ----
+  // ---- Insert blank lines at boundaries of non-contiguous picks to separate blocks ----
   const out: string[] = [];
   let prevPickedLineNo: number | null = null;
 
@@ -399,14 +399,14 @@ function pickLines(text: string, spec: string): string {
     if (!picked.has(lineNo)) continue;
 
     const line = linesArr[i];
-    if (line == null) continue; // undefined/null を完全排除
+    if (line == null) continue; // fully exclude undefined/null
 
-    // 連続していない行へジャンプ → 空行挿入
+    // Jump to a non-contiguous picked line -> insert a blank line
     if (prevPickedLineNo !== null && lineNo !== prevPickedLineNo + 1) {
       if (out.length > 0 && out[out.length - 1] !== "") out.push("");
     }
 
-    // 見出し行が段落の途中に入るのを防ぐ
+    // Prevent heading lines from appearing in the middle of a paragraph
     if (/^\s*=+\s+/.test(line)) {
       if (out.length > 0 && out[out.length - 1] !== "") out.push("");
     }
@@ -419,8 +419,8 @@ function pickLines(text: string, spec: string): string {
 }
 
 /**
- * tag::name[] ～ end::name[] のブロックから、指定 tag の中身だけ抽出
- * - tag::public[] など（Asciidoctorの一般的なタグ形式）
+ * Extract only the contents of the requested tags from tag::name[] .. end::name[] blocks
+ * - e.g. tag::public[] (common Asciidoctor tag format)
  */
 function pickTags(text: string, want: Set<string>): string {
   const lines = text.split(/\r?\n/);
@@ -450,7 +450,7 @@ function pickTags(text: string, want: Set<string>): string {
     const me = reEnd.exec(line);
     if (me) {
       const tag = (me[1] ?? "").trim();
-      // とにかく閉じる（ズレても閉じる）
+      // Always close, even if things are mismatched
       capturing = false;
       currentTag = null;
       continue;
@@ -464,7 +464,7 @@ function pickTags(text: string, want: Set<string>): string {
 
 /** -----------------------------
  *  Heading level shift
- *  - Asciidoc の "=" 見出しを +N / -N する
+ *  - Shift AsciiDoc "=" headings by +N / -N
  *    "= H1" -> "== H1" (offset +1)
  * ----------------------------- */
 function shiftHeadingLevels(text: string, offset: number): string {
@@ -487,7 +487,7 @@ function shiftHeadingLevels(text: string, offset: number): string {
     const cur = eq.length;
     let next = cur + offset;
 
-    // Asciidoc的に 1 未満は作れないので 1 に丸め
+    // AsciiDoc can't have fewer than 1 '=', so clamp to 1
     if (next < 1) next = 1;
 
     out.push(indent + "=".repeat(next) + rest);

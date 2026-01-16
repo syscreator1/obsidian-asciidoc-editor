@@ -1,9 +1,9 @@
 import { createHash } from "crypto";
 
 export interface CacheRecord {
-  mime: string;        // "image/svg+xml" etc
-  base64: string;      // 本体
-  savedAt: number;     // epoch ms
+  mime: string;        // e.g. "image/svg+xml"
+  base64: string;      // Payload
+  savedAt: number;     // Epoch milliseconds
 }
 
 export interface DiagramCacheData {
@@ -21,8 +21,7 @@ export function toBase64(ab: ArrayBuffer): string {
 }
 
 export function fromBase64(b64: string): ArrayBuffer {
-  // Buffer -> (正確な範囲で) ArrayBuffer に切り出す
+  // Buffer -> slice into an ArrayBuffer with the exact range
   const buf = Buffer.from(b64, "base64");
   return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
 }
-

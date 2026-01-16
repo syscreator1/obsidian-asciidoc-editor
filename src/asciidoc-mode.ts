@@ -1,36 +1,46 @@
-// CodeMirror 5 の AsciiDoc 定義を移植したもの
+// Ported implementation of the AsciiDoc mode from CodeMirror 5
 export const asciidocMode = {
     name: "asciidoc",
+
+    // Create the initial parser state
     startState: function() {
         return {
-            list: false,
-            head: false
+            list: false, // Whether the current line is a list item
+            head: false  // Whether the current line is a heading
         };
     },
+
+    // Tokenizer function
     token: function(stream: any, state: any) {
+        // Reset state at the beginning of a line
         if (stream.sol()) {
             state.list = false;
             state.head = false;
         }
+
+        // Skip whitespace
         if (stream.eatSpace()) return null;
-        
+
         const ch = stream.next();
-        
-        // 見出し (=)
-        if (ch === '=' && stream.sol()) {
-            stream.skipToEnd();
+
+        // Headings (=, ==, ===, ...)
+        if (ch === '=') {
+            state.head = true;
+            while (stream.eat('=')) {}
             return "header";
         }
-        // リスト (*, -, .)
+
+        // List items (*, -, .)
         if ((ch === '*' || ch === '-' || ch === '.') && stream.eatSpace()) {
             return "list";
         }
-        // 太字 (*bold*)
+
+        // Bold text (*bold*)
         if (ch === '*') {
             while (stream.next() && stream.current().slice(-1) !== '*') {}
             return "strong";
         }
-        
+
         return null;
     }
 };

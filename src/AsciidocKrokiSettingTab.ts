@@ -83,7 +83,7 @@ export class AsciidocKrokiSettingTab extends PluginSettingTab {
         .onChange(async (v) => {
             this.plugin.settings.highlightStrength = v as any;
             await this.plugin.saveSettings();
-            this.plugin.applyHighlightStrength(); // ★即時反映
+            this.plugin.applyHighlightStrength();   // Apply immediately
         });
     });
 

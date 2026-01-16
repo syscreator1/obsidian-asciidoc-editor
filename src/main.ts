@@ -20,7 +20,7 @@ export default class AsciiDocPlugin extends Plugin {
 			this.settings = Object.assign({}, DEFAULT_SETTINGS, (data ?? {}) as any);
 			this.diagramCache = DEFAULT_CACHE;
 			this.diagramCache.items ||= {};
-			// ★ここで保存して v1 形式に揃えておく（任意だが推奨）
+			// ★Save here to normalize to v1 format (optional but recommended)
 			await this.saveSettings();
 		} else {
 			const v1 = data as PluginDataV1;
@@ -31,18 +31,18 @@ export default class AsciiDocPlugin extends Plugin {
 		
 		this.addSettingTab(new AsciidocKrokiSettingTab(this.app, this));
 
-    // ★プラグインフォルダの絶対パスを確定（Desktop限定）
-    // FileSystemAdapter の getBasePath() を利用
+    // ★Resolve the absolute path of the plugin/vault folder (Desktop only)
+    // Use FileSystemAdapter#getBasePath()
     const adapter: any = this.app.vault.adapter as any;
     const vaultBase: string | undefined = adapter?.getBasePath?.();
 
-    // .adoc を通常のMarkdownエディタで開く（編集はそのまま）
+    // Open .adoc with the normal Markdown editor (editing stays as-is)
     this.registerExtensions(["adoc"], "markdown");
 
     // Preview view
     this.registerView(VIEW_TYPE_ASCIIDOC_PREVIEW, (leaf) => new AsciidocPreviewView(leaf, this));
 
-    // コマンド：現在の .adoc をプレビューで開く
+    // Command: open the current .adoc in the preview
     this.addCommand({
       id: "asciidoc-open-preview",
       name: "Open Asciidoc Preview (current file)",
@@ -55,17 +55,17 @@ export default class AsciiDocPlugin extends Plugin {
       },
     });
 
-		// ★ .adoc を開いている間だけ body にクラスを付けて編集表示をプレーン寄りにする
+		// ★While a .adoc is active, add a class to <body> to make the editor styling more "plain"
 		const updateAdocActiveClass = () => {
 			const f = this.app.workspace.getActiveFile();
 			const isAdoc = !!f && f.extension.toLowerCase() === "adoc";
 			document.body.toggleClass("adoc-active", isAdoc);
 		};
 
-		// 初期状態
+		// Initial state
 		updateAdocActiveClass();
 
-		// アクティブファイル切替で更新
+		// Update on active file change
 		this.registerEvent(this.app.workspace.on("active-leaf-change", updateAdocActiveClass));
 		this.applyHighlightStrength();
 
@@ -90,7 +90,7 @@ export default class AsciiDocPlugin extends Plugin {
   }
 
   private async openPreviewForFile(file: TFile) {
-		// ★一番最初に editorLeaf を確保（getLeaf の前！）
+		// ★Capture editorLeaf first (before calling getLeaf!)
 		const editorLeaf = this.app.workspace.activeLeaf;
 
 		const leaf = this.app.workspace.getLeaf("split", "vertical");
@@ -110,7 +110,7 @@ export default class AsciiDocPlugin extends Plugin {
 			await view.loadFile(file);
 		}
 
-		// ★Obsidianのフォーカス調整に勝つ（rAFを2回）
+		// ★Win against Obsidian focus adjustments (double rAF)
 		if (editorLeaf) {
 			requestAnimationFrame(() => {
 				requestAnimationFrame(() => {

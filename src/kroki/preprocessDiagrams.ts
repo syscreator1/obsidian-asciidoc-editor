@@ -7,12 +7,12 @@ import { expandPlantumlIncludes } from "./expandPlantumlIncludes";
 
 function extractSvgText(svgText: string): string {
   try {
-    // Obsidian(Desktop)はブラウザ環境なのでDOMParserが使える
+    // Obsidian (Desktop) runs in a browser environment, so DOMParser is available
     const doc = new DOMParser().parseFromString(svgText, "image/svg+xml");
     const root = doc.documentElement;
     if (!root) return "";
 
-    // PlantUML/KrokiのSVGは text/tspan に文字が入ることが多い
+    // PlantUML/Kroki SVGs often store text content in text/tspan elements
     const texts = Array.from(root.querySelectorAll("text, tspan"));
 
     const chunks: string[] = [];
@@ -21,7 +21,7 @@ function extractSvgText(svgText: string): string {
       if (t) chunks.push(t);
     }
 
-    // 同じ語が大量に出ることがあるので軽く重複除去（順序維持）
+    // Light de-duplication while preserving order (the same terms may appear many times)
     const seen = new Set<string>();
     const uniq: string[] = [];
     for (const c of chunks) {
@@ -36,7 +36,7 @@ function extractSvgText(svgText: string): string {
   }
 }
 
-// ID用の軽量ハッシュ（FNV-1a 32bit）
+// Lightweight hash for IDs (FNV-1a 32-bit)
 function hash32(s: string): string {
   let h = 0x811c9dc5;
   for (let i = 0; i < s.length; i++) {
@@ -49,15 +49,15 @@ function hash32(s: string): string {
 
 function buildDiagramWrapperHtml(params: {
   diagramType: string;
-  svgOrImgHtml: string; // svgを含むdiv or imgタグ
-  indexText: string;    // Ctrl+F 用（display:noneにしない）
-  sourceForId: string;  // idの安定化用
+  svgOrImgHtml: string; // A div containing the svg, or an <img> tag
+  indexText: string;    // For Ctrl+F (do not hide with display:none)
+  sourceForId: string;  // For stable ID generation
 }): string {
   const { diagramType, svgOrImgHtml, indexText, sourceForId } = params;
   const id = `kroki-${escapeHtml(diagramType)}-${hash32(sourceForId).slice(0, 8)}`;
 
-  // ⚠ display:none は Ctrl+F が拾わないことが多いので「画面外」に出す
-  // ※ aria-hidden=true で読み上げ抑制
+  // ⚠ display:none often won't be picked up by Ctrl+F, so move it "off-screen"
+  // Note: aria-hidden=true to avoid screen reader output
   const indexHtml = indexText
     ? `<div class="kroki-search-index" aria-hidden="true">${escapeHtml(indexText)}</div>`
     : "";
@@ -104,17 +104,17 @@ function buildKrokiErrorHtml(params: {
 }
 
 /**
- * 「200 OK + エラーSVG」対策の完成形
- * - 文字列だけでは誤検知する（ユーザーが図に "parse error" と書ける）
- * - なので「エラーフレーズ」AND「SVG構造の異常」で判定する
+ * Final approach for "200 OK + error SVG" cases
+ * - Pure string matching causes false positives (users can write "parse error" in their diagram)
+ * - So we require: an "error phrase" AND an "abnormal SVG structure"
  */
 function isLikelyErrorSvg(svgText: string, diagramType: string): boolean {
-  // 先頭だけで十分（重くしない）
+  // The head is enough (keep it lightweight)
   const head = svgText.slice(0, 12000);
   const s = head.toLowerCase();
 
-  // 1) エラーフレーズ（弱条件）
-  // ※ "error" 単体は誤検知が多いので使わない
+  // 1) Error phrases (weak condition)
+  // Note: avoid plain "error" because it produces too many false positives
   const hasErrorPhrase =
     s.includes("parse error") ||
     s.includes("syntax error") ||
@@ -126,23 +126,23 @@ function isLikelyErrorSvg(svgText: string, diagramType: string): boolean {
 
   if (!hasErrorPhrase) return false;
 
-  // 2) SVG構造（強条件）
-  // 正常図は path/rect/polygon がそれなりに出る。
-  // エラーSVGは text だけ、shapeがほぼ無いことが多い。
+  // 2) SVG structure (strong condition)
+  // Normal diagrams contain a decent amount of path/rect/polygon.
+  // Error SVGs often contain mostly text and very few shapes.
   const pathCount = (head.match(/<path\b/gi) ?? []).length;
   const rectCount = (head.match(/<rect\b/gi) ?? []).length;
   const polyCount = (head.match(/<polygon\b/gi) ?? []).length;
   const lineCount = (head.match(/<line\b/gi) ?? []).length;
   const shapeCount = pathCount + rectCount + polyCount + lineCount;
 
-  // Mermaid は特に「エラーSVGが text だけ」になりやすいので厳しめに
+  // Mermaid often returns error SVGs that contain only text, so be stricter
   if (diagramType === "mermaid") {
-    // 正常図はだいたい rect/polygon/path が複数出る
+    // Normal diagrams usually contain multiple rect/polygon/path elements
     return shapeCount <= 1;
   }
 
-  // PlantUML / Graphviz 等は、エラー時に 200+SVG になる頻度が低いが、
-  // なっても shape が極端に少ないことが多いので同様に判定
+  // PlantUML / Graphviz etc. less frequently return 200+SVG on error,
+  // but when they do, shape counts tend to be extremely low as well.
   return shapeCount <= 1;
 }
 
@@ -167,7 +167,7 @@ function trimCache(cache: { items: Record<string, CacheItem> }, maxItems: number
 }
 
 /**
- * AsciiDoc text -> Kroki図を埋め込んだ AsciiDoc text
+ * AsciiDoc text -> AsciiDoc text with embedded Kroki diagrams
  */
 export async function preprocessDiagrams(
   plugin: AsciiDocPlugin,
@@ -198,7 +198,7 @@ export async function preprocessDiagrams(
     let sourceForRender = b.source;
 
     try {
-      // ★ PlantUML ブロック内の include:: を展開してから Kroki に投げる
+      // ★Expand include:: inside PlantUML blocks before sending to Kroki
       if (b.diagramType === "plantuml") {
         const before = b.source;
         console.log("[asciidoc-editor] plantuml before len", before.length);
@@ -206,9 +206,9 @@ export async function preprocessDiagrams(
         try {
           sourceForRender = await expandPlantumlIncludes({
             app,
-            baseFile: file,  // 相対パス基準は「今開いている .adoc」
+            baseFile: file,  // Resolve relative paths against the currently open .adoc
             text: b.source,
-            deps,            // include 元を deps に足す（更新で自動再描画）
+            deps,            // Add include sources to deps (auto re-render on updates)
             maxDepth: 20,
           });
 
@@ -236,7 +236,7 @@ export async function preprocessDiagrams(
       if (format === "svg") {
         const svgText = new TextDecoder("utf-8").decode(result.data);
 
-        // ★ 200+SVG で返ってくる「エラーSVG」を検出（誤検知しない完成形）
+        // ★Detect "error SVG" returned as 200+SVG (final form with low false positives)
         if (isLikelyErrorSvg(svgText, b.diagramType)) {
           const html = buildKrokiErrorHtml({
             diagramType: b.diagramType,
@@ -248,19 +248,19 @@ export async function preprocessDiagrams(
         } else {
           const svgText = new TextDecoder("utf-8").decode(result.data);
 
-          // ★ 200+SVGエラー検出の部分はそのままでOK（省略）
+          // ★The 200+SVG error detection logic can stay as-is (omitted)
 
           const diagramHtml = svgToInlineHtml(svgText, b.diagramType);
 
-          // ★検索インデックスは「PlantUMLソースそのもの」を使う
+          // ★Use the PlantUML source itself as the search index
           const indexText = sourceForRender ?? b.source;
 
-          // ★ id安定化用：展開後を使う（PlantUML include対応してる場合）
+          // ★For stable IDs: use expanded source (when PlantUML include is supported)
           const wrapped = buildDiagramWrapperHtml({
             diagramType: b.diagramType,
             svgOrImgHtml: diagramHtml,
             indexText,
-            sourceForId: sourceForRender ?? b.source, // ※下でsourceForRenderを使っているならそちら
+            sourceForId: sourceForRender ?? b.source, // If using sourceForRender below, prefer it
           });
 
           out = out.replace(b.raw, `++++\n${wrapped}\n++++`);
@@ -274,7 +274,7 @@ export async function preprocessDiagrams(
         out = out.replace(b.raw, `++++\n${html}\n++++`);
       }
     } catch (e: any) {
-      // HTTPエラー / timeout などの「例外」はここ
+      // Exceptions such as HTTP errors / timeouts end up here
       const msg = e?.message ? String(e.message) : String(e);
       const html = buildKrokiErrorHtml({
         diagramType: b.diagramType,
@@ -286,7 +286,7 @@ export async function preprocessDiagrams(
     }
   }
 
-  // キャッシュが増えた時だけ保存（性能対策）
+  // Save only when the cache size increased (performance optimization)
   const cacheAfter = Object.keys(plugin.diagramCache.items).length;
   if (cacheAfter !== cacheBefore) {
     trimCache(plugin.diagramCache, plugin.settings.cacheMaxItems);
@@ -295,9 +295,3 @@ export async function preprocessDiagrams(
 
   return out;
 }
-
-
-
-
-
-
